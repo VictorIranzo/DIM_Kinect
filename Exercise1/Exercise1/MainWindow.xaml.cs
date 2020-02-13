@@ -44,6 +44,8 @@
 
                 this.sensor.ColorFrameReady += this.SensorColorFrameReady;
 
+                this.Image.Source = this.ColorBitmap;
+
                 try
                 {
                     this.sensor.Start();
