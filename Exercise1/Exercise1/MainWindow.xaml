@@ -56,6 +56,7 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <DockPanel Grid.Row="0" Margin="0 0 0 20">
             <Image DockPanel.Dock="Left" Source="Images\Logo.png" Stretch="None" Margin="0 10 0 5"/>
@@ -65,7 +66,9 @@
         <Viewbox Grid.Row="1" Stretch="Uniform" HorizontalAlignment="Center">
             <Image Name="Image" Width="640" Height="480" />
         </Viewbox>
-        <TextBlock Name="statusBarText" Margin="-1 0 0 0" Grid.Row="3" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Background="White" Foreground="{StaticResource MediumGreyBrush}"/>
+        <RadioButton Name="colorStreamRadioButton" GroupName="" Margin="-1 0 0 0" Grid.Row="2" IsChecked="True" Checked="RadioButton_Checked">Color stream</RadioButton>
+        <RadioButton Name="depthStreamRadioButton" GroupName="" Margin="-1 0 0 0" Grid.Row="3" Checked="RadioButton_Checked">Depth stream</RadioButton>
+        <TextBlock Name="statusBarText" Margin="-1 0 0 0" Grid.Row="4" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Background="White" Foreground="{StaticResource MediumGreyBrush}"/>
     </Grid>
 
 </Window>
