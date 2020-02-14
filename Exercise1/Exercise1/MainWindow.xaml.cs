@@ -15,7 +15,8 @@
         private KinectSensor sensor;
 
         private byte[] colorPixels;
-        private DepthImagePixel[] depthPixels;
+        private DepthImagePixel[] depthPixels;
+
         public WriteableBitmap ColorBitmap { get; set; }
 
         public WriteableBitmap DepthBitmap { get; set; }
@@ -52,7 +53,8 @@
                 {
                     this.sensor = null;
                 }
-            }            else
+            }
+            else
             {
                 this.statusBarText.Text = "Sensor not detected";
             }
@@ -84,6 +86,10 @@
 
         private void WindowClosing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            if (this.sensor != null)
+            {
+                this.sensor.Stop();
+            }
         }
 
         private void SensorColorFrameReady(object sender, ColorImageFrameReadyEventArgs e)
