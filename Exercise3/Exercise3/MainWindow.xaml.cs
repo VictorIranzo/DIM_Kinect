@@ -1,10 +1,13 @@
 ﻿namespace Exercise3
 {
-    using System;
     using System.IO;
     using System.Windows;
     using System.Windows.Media;
     using Microsoft.Kinect;
+
+    //*******************************************
+    using Kinect.Toolbox;
+    using System;
 
     public partial class MainWindow : Window
     {
@@ -17,22 +20,26 @@
         private readonly Brush centerPointBrush = Brushes.Blue;
         private readonly Brush trackedJointBrush = new SolidColorBrush(Color.FromArgb(255, 68, 192, 68));
         private readonly Brush inferredJointBrush = Brushes.Yellow;
-        private readonly Pen trackedBonePen = new Pen(Brushes.Green, 6);       
+        private readonly Pen trackedBonePen = new Pen(Brushes.Green, 6);
         private readonly Pen inferredBonePen = new Pen(Brushes.Gray, 1);
 
         private KinectSensor sensor;
         private DrawingGroup drawingGroup;
         private DrawingImage imageSource;
 
-        private Skeleton[] skeletons;
+        //***********************TO DO*******************************
+        // Definir reconocedores como miembros privados
 
         public MainWindow()
         {
             InitializeComponent();
         }
 
+        //**************** TO DO ********************************************
+        // Definir métodos manejadores que se ejecuten cuando se detecte gesto
+
         /// <summary>
-        ///     Draws indicators to show which edges are clipping skeleton data
+        ///     Draws indicators to show which edges are clipping skeleton data.
         /// </summary>
         /// <param name="skeleton"> Skeleton to draw clipping information for. </param>
         /// <param name="drawingContext"> Drawing context to draw to. </param>
@@ -78,6 +85,14 @@
         /// <param name="e"> Event arguments. </param>
         private void WindowLoaded(object sender, RoutedEventArgs e)
         {
+            //********************TO DO*************************************
+            // Instanciar reconocedores
+            // Si es reconocedor Template_Based abrir fichero con templates             
+            // Path.Combine(Environment.CurrentDirectory, @"Datos\circleKB.save")
+
+            //********************TO DO*************************************
+            // Añadir los manejadores como listeners de OnGestureDetected
+
             // Create the drawing group we'll use for drawing.
             this.drawingGroup = new DrawingGroup();
 
@@ -87,23 +102,28 @@
             // Display the drawing using our image control.
             Image.Source = this.imageSource;
 
-            //***************************TO DO**********************************
-            // DETECCIÓN SENSORES Y ARRANQUE. REGISTRO MANEJADOR DE EVENTOS 
-            // ACTIVACIÓN STREAM ESQUELETOS.
-            foreach (KinectSensor potentialSensor in KinectSensor.KinectSensors)
+            // Look through all sensors and start the first connected one.
+            // This requires that a Kinect is connected at the time of app startup.
+            // To make your app robust against plug/unplug,
+            // it is recommended to use KinectSensorChooser provided in Microsoft.Kinect.Toolkit.
+            foreach (var potentialSensor in KinectSensor.KinectSensors)
             {
                 if (potentialSensor.Status == KinectStatus.Connected)
                 {
                     this.sensor = potentialSensor;
-
                     break;
                 }
             }
 
-            if (this.sensor != null)
+            if (null != this.sensor)
             {
-                this.EnableSkeletonStream();
+                // Turn on the skeleton stream to receive skeleton frames.
+                this.sensor.SkeletonStream.Enable();
 
+                // Add an event handler to be called whenever there is new color frame data.
+                this.sensor.SkeletonFrameReady += this.SensorSkeletonFrameReady;
+
+                // Start the sensor!
                 try
                 {
                     this.sensor.Start();
@@ -113,13 +133,11 @@
                     this.sensor = null;
                 }
             }
-        }
 
-        private void EnableSkeletonStream()
-        {
-            this.sensor.SkeletonStream.Enable();
-
-            this.sensor.SkeletonFrameReady += this.SensorSkeletonFrameReady;
+            if (null == this.sensor)
+            {
+                this.statusBarText.Text = Properties.Resources.NoKinectReady;
+            }
         }
 
         /// <summary>
@@ -129,9 +147,7 @@
         /// <param name="e"> Event arguments. </param>
         private void WindowClosing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            //***************************TO DO**********************************
-            // PARADA DE SENSOR.
-            if (this.sensor != null)
+            if (null != this.sensor)
             {
                 this.sensor.Stop();
             }
@@ -148,8 +164,6 @@
 
             using (SkeletonFrame skeletonFrame = e.OpenSkeletonFrame())
             {
-                //****************************TO DO**********************************
-                // COPIADO DE LOS ESQUELETOS DEL FRAME A ALMACENAMIENTO SKELETONS.
                 if (skeletonFrame != null)
                 {
                     skeletons = new Skeleton[skeletonFrame.SkeletonArrayLength];
@@ -220,26 +234,34 @@
             this.DrawBone(skeleton, drawingContext, JointType.KneeLeft, JointType.AnkleLeft);
             this.DrawBone(skeleton, drawingContext, JointType.AnkleLeft, JointType.FootLeft);
 
-            //*************************************TO DO************************************
-            // DIBUJAR LA PIERNA DERECHA.
+            // Right Leg.
             this.DrawBone(skeleton, drawingContext, JointType.HipRight, JointType.KneeRight);
             this.DrawBone(skeleton, drawingContext, JointType.KneeRight, JointType.AnkleRight);
             this.DrawBone(skeleton, drawingContext, JointType.AnkleRight, JointType.FootRight);
 
-            // ************************************TO DO************************************
-            // DIBUJAR TODOS LOS JOINTS COMO ELIPSES (BUCLE).
+            // Render Joints.
             foreach (Joint joint in skeleton.Joints)
             {
-                // - Si el estado del Joint es "Tracked" usar this.trackedJointBrush;
+                Brush drawBrush = null;
+
                 if (joint.TrackingState == JointTrackingState.Tracked)
                 {
-                    drawingContext.DrawEllipse(this.trackedJointBrush, null, this.SkeletonPointToScreen(joint.Position), JointThickness, JointThickness);
+                    drawBrush = this.trackedJointBrush;
                 }
-                // - Si el estado del Joint es "Inferred" usar this.inferredJointBrush;
                 else if (joint.TrackingState == JointTrackingState.Inferred)
                 {
-                    drawingContext.DrawEllipse(this.inferredJointBrush, null, this.SkeletonPointToScreen(joint.Position), JointThickness, JointThickness);
+                    drawBrush = this.inferredJointBrush;
                 }
+
+                if (drawBrush != null)
+                {
+                    drawingContext.DrawEllipse(drawBrush, null, this.SkeletonPointToScreen(joint.Position), JointThickness, JointThickness);
+                }
+
+                //***************************TO DO *********************************
+                // Si el joint está en estado JointTrackingState.Tracked y su tipo 
+                // es el que queremos seguir joint.JointType == JointType.HandRight
+                // añadir la posición del Joint al reconocedor
             }
         }
 
@@ -253,7 +275,6 @@
             // Convert point to depth space.
             // We are not using depth directly, but we do want the points in our 640x480 output resolution.
             DepthImagePoint depthPoint = this.sensor.CoordinateMapper.MapSkeletonPointToDepthPoint(skelpoint, DepthImageFormat.Resolution640x480Fps30);
-
             return new Point(depthPoint.X, depthPoint.Y);
         }
 
@@ -266,40 +287,31 @@
         /// <param name="jointType1"> Joint to end drawing at. </param>
         private void DrawBone(Skeleton skeleton, DrawingContext drawingContext, JointType jointType0, JointType jointType1)
         {
-            //********************************TO DO***************************************
-            // OBTENER LOS JOINTS DE LOS TIPOS PASADOS COMO PARÁMETROS.
-            // joint0 y  joint1.
             Joint joint0 = skeleton.Joints[jointType0];
             Joint joint1 = skeleton.Joints[jointType1];
 
-            // - SI AMBOS "Tracked" dibujar con this.trackedBonePen.
+            // If we can't find either of these joints, exit.
+            if (joint0.TrackingState == JointTrackingState.NotTracked ||
+                joint1.TrackingState == JointTrackingState.NotTracked)
+            {
+                return;
+            }
+
+            // Don't draw if both points are inferred.
+            if (joint0.TrackingState == JointTrackingState.Inferred &&
+                joint1.TrackingState == JointTrackingState.Inferred)
+            {
+                return;
+            }
+
+            // We assume all drawn bones are inferred unless BOTH joints are tracked.
+            Pen drawPen = this.inferredBonePen;
             if (joint0.TrackingState == JointTrackingState.Tracked && joint1.TrackingState == JointTrackingState.Tracked)
             {
-                drawingContext.DrawLine(this.trackedBonePen, this.SkeletonPointToScreen(joint0.Position), this.SkeletonPointToScreen(joint1.Position));
-
-                return;
+                drawPen = this.trackedBonePen;
             }
 
-            // - SI uno de los dos "NotTracked" no dibujar nada: return;
-            if (joint0.TrackingState == JointTrackingState.NotTracked || joint1.TrackingState == JointTrackingState.NotTracked)
-            {
-                return;
-            }
-
-            // - SI AMBOS "Inferred" no dibujar nada: return;
-            if (joint0.TrackingState == JointTrackingState.Inferred && joint1.TrackingState == JointTrackingState.Inferred)
-            {
-                return;
-            }
-
-            // - SI uno "Inferred" y otro "Tracked" dibujar con this.inferredBonePen
-            if ((joint0.TrackingState == JointTrackingState.Inferred && joint1.TrackingState == JointTrackingState.Tracked)
-                || (joint0.TrackingState == JointTrackingState.Tracked && joint1.TrackingState == JointTrackingState.Inferred))
-            {
-                drawingContext.DrawLine(this.inferredBonePen, this.SkeletonPointToScreen(joint0.Position), this.SkeletonPointToScreen(joint1.Position));
-
-                return;
-            }
+            drawingContext.DrawLine(drawPen, this.SkeletonPointToScreen(joint0.Position), this.SkeletonPointToScreen(joint1.Position));
         }
 
         /// <summary>
@@ -309,18 +321,14 @@
         /// <param name="e"> Event arguments. </param>
         private void CheckBoxSeatedModeChanged(object sender, RoutedEventArgs e)
         {
-            if (this.sensor != null)
+            if (null != this.sensor)
             {
                 if (this.checkBoxSeatedMode.IsChecked.GetValueOrDefault())
                 {
-                    //*****************************TO DO**********************************
-                    //ACTIVAR MODO SENTADO.
                     this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
                 }
                 else
                 {
-                    //*****************************TO DO**********************************
-                    //ACTIVAR MODO DEFAULT.
                     this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Default;
                 }
             }
