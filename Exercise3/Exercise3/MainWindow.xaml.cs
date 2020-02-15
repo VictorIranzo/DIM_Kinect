@@ -8,6 +8,7 @@
     //*******************************************
     using Kinect.Toolbox;
     using System;
+    using System.Windows.Media.Imaging;
 
     public partial class MainWindow : Window
     {
@@ -26,56 +27,23 @@
         private KinectSensor sensor;
         private DrawingGroup drawingGroup;
         private DrawingImage imageSource;
+        private WriteableBitmap colorBitmap;
+        private WriteableBitmap depthBitmap;
+
+        private byte[] colorPixels;
+        private DepthImagePixel[] depthPixels;
+
+        private bool alternativeBoolBackground;
+        private bool alternativeBoolSkeleton;
 
         //***********************TO DO*******************************
         // Definir reconocedores como miembros privados
+        private SwipeGestureDetector swipeGestureRecognizer;
+        private TemplatedGestureDetector circleGestureRecognizer;
 
         public MainWindow()
         {
             InitializeComponent();
-        }
-
-        //**************** TO DO ********************************************
-        // Definir métodos manejadores que se ejecuten cuando se detecte gesto
-
-        /// <summary>
-        ///     Draws indicators to show which edges are clipping skeleton data.
-        /// </summary>
-        /// <param name="skeleton"> Skeleton to draw clipping information for. </param>
-        /// <param name="drawingContext"> Drawing context to draw to. </param>
-        private static void RenderClippedEdges(Skeleton skeleton, DrawingContext drawingContext)
-        {
-            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Bottom))
-            {
-                drawingContext.DrawRectangle(
-                    Brushes.Red,
-                    null,
-                    new Rect(0, RenderHeight - ClipBoundsThickness, RenderWidth, ClipBoundsThickness));
-            }
-
-            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Top))
-            {
-                drawingContext.DrawRectangle(
-                    Brushes.Red,
-                    null,
-                    new Rect(0, 0, RenderWidth, ClipBoundsThickness));
-            }
-
-            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Left))
-            {
-                drawingContext.DrawRectangle(
-                    Brushes.Red,
-                    null,
-                    new Rect(0, 0, ClipBoundsThickness, RenderHeight));
-            }
-
-            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Right))
-            {
-                drawingContext.DrawRectangle(
-                    Brushes.Red,
-                    null,
-                    new Rect(RenderWidth - ClipBoundsThickness, 0, ClipBoundsThickness, RenderHeight));
-            }
         }
 
         /// <summary>
@@ -87,12 +55,20 @@
         {
             //********************TO DO*************************************
             // Instanciar reconocedores
-            // Si es reconocedor Template_Based abrir fichero con templates             
+            // Si es reconocedor Template_Based abrir fichero con templates.
             // Path.Combine(Environment.CurrentDirectory, @"Datos\circleKB.save")
+            swipeGestureRecognizer = new SwipeGestureDetector();
+            string circleKBPath = Path.Combine(Environment.CurrentDirectory, @"Datos\circleKB.save");
+
+            using (Stream recordStream = File.Open(circleKBPath, FileMode.Open))
+            {
+                circleGestureRecognizer = new TemplatedGestureDetector("Circle", recordStream);
+            }
 
             //********************TO DO*************************************
             // Añadir los manejadores como listeners de OnGestureDetected
-
+            circleGestureRecognizer.OnGestureDetected += OnGestureDetectedCircle;
+            swipeGestureRecognizer.OnGestureDetected += OnGestureDetectedSwipe;
             // Create the drawing group we'll use for drawing.
             this.drawingGroup = new DrawingGroup();
 
@@ -150,6 +126,77 @@
             if (null != this.sensor)
             {
                 this.sensor.Stop();
+            }
+        }
+
+        //**************** TO DO ********************************************
+        // Definir métodos manejadores que se ejecuten cuando se detecte gesto
+
+        private void OnGestureDetectedSwipe(string gesture)
+        {
+            alternativeBoolBackground = !alternativeBoolBackground;
+
+            if (alternativeBoolBackground)
+            {
+                this.Image.Source = this.colorBitmap;
+            }
+            else
+            {
+                this.Image.Source = this.depthBitmap;
+            }
+        }
+
+        private void OnGestureDetectedCircle(string gesture)
+        {
+            alternativeBoolSkeleton = !alternativeBoolSkeleton;
+
+            if (alternativeBoolSkeleton)
+            {
+                this.sensor.SkeletonStream.Enable();
+            }
+            else
+            {
+                this.sensor.SkeletonStream.Disable();
+            }
+        }
+
+        /// <summary>
+        ///     Draws indicators to show which edges are clipping skeleton data.
+        /// </summary>
+        /// <param name="skeleton"> Skeleton to draw clipping information for. </param>
+        /// <param name="drawingContext"> Drawing context to draw to. </param>
+        private static void RenderClippedEdges(Skeleton skeleton, DrawingContext drawingContext)
+        {
+            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Bottom))
+            {
+                drawingContext.DrawRectangle(
+                    Brushes.Red,
+                    null,
+                    new Rect(0, RenderHeight - ClipBoundsThickness, RenderWidth, ClipBoundsThickness));
+            }
+
+            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Top))
+            {
+                drawingContext.DrawRectangle(
+                    Brushes.Red,
+                    null,
+                    new Rect(0, 0, RenderWidth, ClipBoundsThickness));
+            }
+
+            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Left))
+            {
+                drawingContext.DrawRectangle(
+                    Brushes.Red,
+                    null,
+                    new Rect(0, 0, ClipBoundsThickness, RenderHeight));
+            }
+
+            if (skeleton.ClippedEdges.HasFlag(FrameEdges.Right))
+            {
+                drawingContext.DrawRectangle(
+                    Brushes.Red,
+                    null,
+                    new Rect(RenderWidth - ClipBoundsThickness, 0, ClipBoundsThickness, RenderHeight));
             }
         }
 
@@ -261,7 +308,17 @@
                 //***************************TO DO *********************************
                 // Si el joint está en estado JointTrackingState.Tracked y su tipo 
                 // es el que queremos seguir joint.JointType == JointType.HandRight
-                // añadir la posición del Joint al reconocedor
+                // añadir la posición del Joint al reconocedor.
+
+                if (joint.TrackingState == JointTrackingState.Tracked && joint.JointType == JointType.HandLeft)
+                {
+                    swipeGestureRecognizer.Add(joint.Position, sensor);
+                }
+
+                if (joint.TrackingState == JointTrackingState.Tracked && joint.JointType == JointType.HandRight)
+                {
+                    circleGestureRecognizer.Add(joint.Position, sensor);
+                }
             }
         }
 
@@ -276,6 +333,30 @@
             // We are not using depth directly, but we do want the points in our 640x480 output resolution.
             DepthImagePoint depthPoint = this.sensor.CoordinateMapper.MapSkeletonPointToDepthPoint(skelpoint, DepthImageFormat.Resolution640x480Fps30);
             return new Point(depthPoint.X, depthPoint.Y);
+        }
+
+        private void EnableColorStream()
+        {
+            this.sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
+
+            this.colorPixels = new byte[this.sensor.ColorStream.FramePixelDataLength];
+
+            this.colorBitmap = new WriteableBitmap(this.sensor.ColorStream.FrameWidth,
+                this.sensor.ColorStream.FrameHeight, 96.0, 96.0, PixelFormats.Bgr32, null);
+
+            this.sensor.ColorFrameReady += this.SensorColorFrameReady;
+        }
+
+        private void EnableDepthStream()
+        {
+            this.sensor.DepthStream.Enable(DepthImageFormat.Resolution640x480Fps30);
+
+            this.depthPixels = new DepthImagePixel[this.sensor.DepthStream.FramePixelDataLength];
+
+            this.depthBitmap = new WriteableBitmap(this.sensor.DepthStream.FrameWidth,
+                this.sensor.DepthStream.FrameHeight, 96.0, 96.0, PixelFormats.Bgr32, null);
+
+            this.sensor.DepthFrameReady += this.SensorDepthFrameReady;
         }
 
         /// <summary>
@@ -312,6 +393,55 @@
             }
 
             drawingContext.DrawLine(drawPen, this.SkeletonPointToScreen(joint0.Position), this.SkeletonPointToScreen(joint1.Position));
+        }
+
+        private void SensorColorFrameReady(object sender, ColorImageFrameReadyEventArgs e)
+        {
+            using (ColorImageFrame colorFrame = e.OpenColorImageFrame())
+            {
+                if (colorFrame != null)
+                {
+                    colorFrame.CopyPixelDataTo(this.colorPixels);
+                    this.colorBitmap.WritePixels(new Int32Rect(0, 0,
+                    this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight),
+                    this.colorPixels, this.colorBitmap.PixelWidth * sizeof(int), 0);
+                }
+            }
+        }
+
+        private void SensorDepthFrameReady(object sender, DepthImageFrameReadyEventArgs e)
+        {
+            using (DepthImageFrame depthFrame = e.OpenDepthImageFrame())
+            {
+                if (depthFrame != null)
+                {
+                    depthFrame.CopyDepthImagePixelDataTo(this.depthPixels);
+
+                    int minDepth = depthFrame.MinDepth;
+                    int maxDepth = depthFrame.MaxDepth;
+
+                    // Convert depth to RGB.
+                    int colorPixelIndex = 0;
+                    for (int i = 0; i < this.depthPixels.Length; ++i)
+                    {
+                        short depth = depthPixels[i].Depth;
+                        byte intensity = (byte)(depth >= minDepth && depth <= maxDepth ?
+                        depth : 0);
+                        this.colorPixels[colorPixelIndex++] = intensity;
+                        this.colorPixels[colorPixelIndex++] = intensity;
+                        this.colorPixels[colorPixelIndex++] = intensity;
+                        ++colorPixelIndex; // No alpha channel RGB.
+                    }
+
+                    // Copy pixels in RGB in the bitmap.
+                    this.depthBitmap.WritePixels(
+                    new Int32Rect(0, 0, this.depthBitmap.PixelWidth,
+                    this.depthBitmap.PixelHeight),
+                    this.colorPixels,
+                    this.depthBitmap.PixelWidth * sizeof(int),
+                    0);
+                }
+            }
         }
 
         /// <summary>
