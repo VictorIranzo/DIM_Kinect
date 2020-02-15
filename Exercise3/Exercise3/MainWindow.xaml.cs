@@ -33,8 +33,8 @@
         private byte[] colorPixels;
         private DepthImagePixel[] depthPixels;
 
-        private bool alternativeBoolBackground;
-        private bool alternativeBoolSkeleton;
+        private bool enabledColorStream;
+        private bool enabledSkeleton = true;
 
         //***********************TO DO*******************************
         // Definir reconocedores como miembros privados
@@ -93,6 +93,9 @@
 
             if (null != this.sensor)
             {
+                this.SetupColorStream();
+                this.SetupDepthStream();
+
                 // Turn on the skeleton stream to receive skeleton frames.
                 this.sensor.SkeletonStream.Enable();
 
@@ -109,6 +112,8 @@
                     this.sensor = null;
                 }
             }
+
+            this.ChangeBackground();
 
             if (null == this.sensor)
             {
@@ -134,29 +139,33 @@
 
         private void OnGestureDetectedSwipe(string gesture)
         {
-            alternativeBoolBackground = !alternativeBoolBackground;
-
-            if (alternativeBoolBackground)
+            if (gesture == "SwipeToRight")
             {
-                this.Image.Source = this.colorBitmap;
+                this.ChangeBackground();
+            }
+        }
+
+        private void ChangeBackground()
+        {
+            enabledColorStream = !enabledColorStream;
+
+            if (enabledColorStream)
+            {
+                this.sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
+                this.sensor.DepthStream.Disable();
             }
             else
             {
-                this.Image.Source = this.depthBitmap;
+                this.sensor.DepthStream.Enable(DepthImageFormat.Resolution640x480Fps30);
+                this.sensor.ColorStream.Disable();
             }
         }
 
         private void OnGestureDetectedCircle(string gesture)
         {
-            alternativeBoolSkeleton = !alternativeBoolSkeleton;
-
-            if (alternativeBoolSkeleton)
+            if (gesture == "Circle")
             {
-                this.sensor.SkeletonStream.Enable();
-            }
-            else
-            {
-                this.sensor.SkeletonStream.Disable();
+                enabledSkeleton = !enabledSkeleton;
             }
         }
 
@@ -218,11 +227,24 @@
                 }
             }
 
+            this.RefreshView(skeletons);
+        }
+
+        private void RefreshView(Skeleton[] skeletons)
+        {
             using (DrawingContext dc = this.drawingGroup.Open())
             {
-                // Draw a transparent background to set the render size.
-                dc.DrawRectangle(Brushes.Black, null, new Rect(0.0, 0.0, RenderWidth, RenderHeight));
+                if (enabledColorStream)
+                {
+                    dc.DrawImage(this.colorBitmap, new Rect(0.0, 0.0, RenderWidth, RenderHeight));
+                }
+                else
+                {
+                    dc.DrawImage(this.depthBitmap, new Rect(0.0, 0.0, RenderWidth, RenderHeight));
+                }
 
+                // Draw a transparent background to set the render size.
+                ////dc.DrawRectangle(Brushes.Black, null, new Rect(0.0, 0.0, RenderWidth, RenderHeight));
                 if (skeletons.Length != 0)
                 {
                     foreach (Skeleton skel in skeletons)
@@ -233,7 +255,7 @@
                         {
                             this.DrawBonesAndJoints(skel, dc);
                         }
-                        else if (skel.TrackingState == SkeletonTrackingState.PositionOnly)
+                        else if (skel.TrackingState == SkeletonTrackingState.PositionOnly && enabledSkeleton)
                         {
                             dc.DrawEllipse(
                             this.centerPointBrush,
@@ -256,6 +278,57 @@
         /// <param name="skeleton"> Skeleton to draw. </param>
         /// <param name="drawingContext"> Drawing context to draw to. </param>
         private void DrawBonesAndJoints(Skeleton skeleton, DrawingContext drawingContext)
+        {
+            if (this.enabledSkeleton)
+            {
+                DrawBones(skeleton, drawingContext);
+            }
+
+            // Render Joints.
+            foreach (Joint joint in skeleton.Joints)
+            {
+                if (enabledSkeleton)
+                {
+                    this.DrawJoint(drawingContext, joint);
+                }
+
+                //***************************TO DO *********************************
+                // Si el joint está en estado JointTrackingState.Tracked y su tipo 
+                // es el que queremos seguir joint.JointType == JointType.HandRight
+                // añadir la posición del Joint al reconocedor.
+
+                if (joint.TrackingState == JointTrackingState.Tracked && joint.JointType == JointType.HandLeft)
+                {
+                    swipeGestureRecognizer.Add(joint.Position, sensor);
+                }
+
+                if (joint.TrackingState == JointTrackingState.Tracked && joint.JointType == JointType.HandRight)
+                {
+                    circleGestureRecognizer.Add(joint.Position, sensor);
+                }
+            }
+        }
+
+        private void DrawJoint(DrawingContext drawingContext, Joint joint)
+        {
+            Brush drawBrush = null;
+
+            if (joint.TrackingState == JointTrackingState.Tracked)
+            {
+                drawBrush = this.trackedJointBrush;
+            }
+            else if (joint.TrackingState == JointTrackingState.Inferred)
+            {
+                drawBrush = this.inferredJointBrush;
+            }
+
+            if (drawBrush != null)
+            {
+                drawingContext.DrawEllipse(drawBrush, null, this.SkeletonPointToScreen(joint.Position), JointThickness, JointThickness);
+            }
+        }
+
+        private void DrawBones(Skeleton skeleton, DrawingContext drawingContext)
         {
             // Render Torso.
             this.DrawBone(skeleton, drawingContext, JointType.Head, JointType.ShoulderCenter);
@@ -285,41 +358,6 @@
             this.DrawBone(skeleton, drawingContext, JointType.HipRight, JointType.KneeRight);
             this.DrawBone(skeleton, drawingContext, JointType.KneeRight, JointType.AnkleRight);
             this.DrawBone(skeleton, drawingContext, JointType.AnkleRight, JointType.FootRight);
-
-            // Render Joints.
-            foreach (Joint joint in skeleton.Joints)
-            {
-                Brush drawBrush = null;
-
-                if (joint.TrackingState == JointTrackingState.Tracked)
-                {
-                    drawBrush = this.trackedJointBrush;
-                }
-                else if (joint.TrackingState == JointTrackingState.Inferred)
-                {
-                    drawBrush = this.inferredJointBrush;
-                }
-
-                if (drawBrush != null)
-                {
-                    drawingContext.DrawEllipse(drawBrush, null, this.SkeletonPointToScreen(joint.Position), JointThickness, JointThickness);
-                }
-
-                //***************************TO DO *********************************
-                // Si el joint está en estado JointTrackingState.Tracked y su tipo 
-                // es el que queremos seguir joint.JointType == JointType.HandRight
-                // añadir la posición del Joint al reconocedor.
-
-                if (joint.TrackingState == JointTrackingState.Tracked && joint.JointType == JointType.HandLeft)
-                {
-                    swipeGestureRecognizer.Add(joint.Position, sensor);
-                }
-
-                if (joint.TrackingState == JointTrackingState.Tracked && joint.JointType == JointType.HandRight)
-                {
-                    circleGestureRecognizer.Add(joint.Position, sensor);
-                }
-            }
         }
 
         /// <summary>
@@ -335,10 +373,8 @@
             return new Point(depthPoint.X, depthPoint.Y);
         }
 
-        private void EnableColorStream()
+        private void SetupColorStream()
         {
-            this.sensor.ColorStream.Enable(ColorImageFormat.RgbResolution640x480Fps30);
-
             this.colorPixels = new byte[this.sensor.ColorStream.FramePixelDataLength];
 
             this.colorBitmap = new WriteableBitmap(this.sensor.ColorStream.FrameWidth,
@@ -347,10 +383,8 @@
             this.sensor.ColorFrameReady += this.SensorColorFrameReady;
         }
 
-        private void EnableDepthStream()
+        private void SetupDepthStream()
         {
-            this.sensor.DepthStream.Enable(DepthImageFormat.Resolution640x480Fps30);
-
             this.depthPixels = new DepthImagePixel[this.sensor.DepthStream.FramePixelDataLength];
 
             this.depthBitmap = new WriteableBitmap(this.sensor.DepthStream.FrameWidth,
